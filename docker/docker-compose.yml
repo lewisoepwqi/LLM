@@ -1,0 +1,60 @@
+# contract_radar — Qwen3.5-9B 模型服务（Linux + NVIDIA CUDA, Docker）
+#
+# 目标机器：Ubuntu 22.04.5 LTS / driver 535 / CUDA 12.2 / 2x RTX A4000 16GB
+# 策略：单卡（GPU 0）全量 offload（-ngl 99），OpenAI-compatible API 暴露在 8080。
+#
+# 用法：
+#   cd deploy/docker
+#   cp .env.docker.example .env        # 按需修改 MODELS_DIR / MODEL_FILE 等
+#   docker compose up -d
+#   docker compose logs -f
+#
+# 变量默认值见 .env.docker.example；compose 会做 ${VAR:-default} 替换。
+
+services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: contract_radar_llm
+    restart: unless-stopped
+
+    ports:
+      # 宿主机端口:容器内端口。容器内固定 8080。
+      - "${LLAMA_SERVER_PORT:-8080}:8080"
+
+    volumes:
+      # 把宿主机模型目录只读挂载进容器的 /models。
+      # 默认 ../models = 与 docker/ 同级的 models/（自包含布局，见下方注释）。
+      - "${MODELS_DIR:-../models}:/models:ro"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              # 只暴露 GPU 0 给容器 —— 第二张卡留作备用（符合“先单卡跑通”）。
+              # 想用第二张卡改成 ["1"]，想双卡改成 ["0","1"]（需配合调度策略）。
+              device_ids: ["${GPU_DEVICE_ID:-0}"]
+              capabilities: [gpu]
+
+    # 用 list 形式传参，避免 JSON 大括号被 shell/YAML 误解析。
+    command:
+      - "-m"
+      - "/models/${MODEL_FILE:-Qwen3.5-9B/Qwen_Qwen3.5-9B-Q5_K_M.gguf}"
+      - "-ngl"
+      - "${N_GPU_LAYERS:-99}"
+      - "-c"
+      - "${CONTEXT_SIZE:-8192}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "--chat-template-kwargs"
+      - '{"enable_thinking":false}'
+
+    healthcheck:
+      # llama-server 提供 /health 端点；起来后返回 200。
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
