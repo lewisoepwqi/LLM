@@ -1,0 +1,24 @@
+# 模型文件目录（GGUF 等大文件，不入库）
+models/
+
+# Docker 镜像导出包
+*.tar
+
+# 常见模型权重文件（防止散落到仓库根目录）
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
