@@ -14,7 +14,7 @@
 services:
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
-    container_name: contract_radar_llm
+    container_name: Qwen3.5-9B
     restart: unless-stopped
 
     ports:
