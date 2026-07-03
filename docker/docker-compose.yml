@@ -42,8 +42,15 @@ services:
       - "/models/${MODEL_FILE:-Qwen3.5-9B/Qwen_Qwen3.5-9B-Q5_K_M.gguf}"
       - "-ngl"
       - "${N_GPU_LAYERS:-99}"
+      # 上下文总量。开并行(--parallel N)后按 N 均分到各槽，故这里 = 单槽上下文 × 并行数。
+      # 默认 16384 = 2 槽 × 8192/槽，够读被截断到 READ_MAX_CHARS(默认8000字)的合同正文。
       - "-c"
-      - "${CONTEXT_SIZE:-8192}"
+      - "${CONTEXT_SIZE:-16384}"
+      # 并行解码：检索"深度档"逐份读正文可多路并发（后端 READ_CONCURRENCY 配合）。
+      # --parallel N 开 N 个槽 + 连续批处理；单卡 A4000 上 N=2 兼顾吞吐与显存/算力。
+      - "--parallel"
+      - "${LLAMA_PARALLEL:-2}"
+      - "--cont-batching"
       - "--host"
       - "0.0.0.0"
       - "--port"
