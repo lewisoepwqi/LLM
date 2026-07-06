@@ -11,6 +11,10 @@
 #
 # 变量默认值见 .env.docker.example；compose 会做 ${VAR:-default} 替换。
 
+# 独立 compose 项目名，防与同机其它 docker/ 目录（Embedding/Rerank）互认孤儿容器、
+# 被 --remove-orphans 误删（三者默认项目名都叫 docker）。
+name: qwen3-5-9b
+
 services:
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
