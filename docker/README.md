@@ -12,7 +12,7 @@ NVIDIA Driver 535.309.01 / CUDA 12.2
 2x NVIDIA RTX A4000 16GB
 ```
 
-策略：**单卡（GPU 0）全量 offload**。Qwen3.5-9B Q5_K_M 权重 ~6.5GB + KV cache ~1-2GB，单张 16GB A4000 富余，第二张卡留作备用。
+策略：**单卡（GPU 0）全量 offload**。Qwen3.5-9B Q5_K_M 权重 ~6.5GB + 视觉投影器 mmproj ~0.86GB + KV cache ~1-2GB，单张 16GB A4000 仍富余，第二张卡留作备用。
 
 > **离线 / 内网服务器**（无法 `docker pull`、`hf download`、`apt install`）请看 [`OFFLINE.md`](OFFLINE.md)：在有网机器上把镜像、模型、依赖打包成文件，再上传 `docker load`。本文下面的步骤默认服务器有外网。
 
@@ -83,7 +83,8 @@ docker compose logs -f          # 看加载日志，出现 "server listening" �
 cd ~/app/LLM/docker && bash test_api.sh
 ```
 
-应看到 `/v1/models` 返回、一句话回答，以及 `nvidia-smi` 里 GPU 0 占用 ~8-9GB。
+应看到 `/v1/models` 返回、一句话回答，以及 `nvidia-smi` 里 GPU 0 占用 ~9-10GB
+（默认已加载视觉投影器，多占约 0.86GB；关掉视觉后降回 ~8-9GB）。
 
 ## 常用运维
 
@@ -168,7 +169,7 @@ bash test_api.sh             # 全量（含视觉）
 |---|---|
 | 换量化文件 | `.env` 里改 `MODEL_FILE=Qwen3.5-9B/Qwen_Qwen3.5-9B-Q4_K_M.gguf` |
 | 换端口 | `.env` 里改 `LLAMA_SERVER_PORT=8081` |
-| 显存吃紧 | `.env` 里降 `CONTEXT_SIZE=4096` |
+| 显存吃紧 | 每槽 = `CONTEXT_SIZE / LLAMA_PARALLEL`，别低于 8192：`.env` 里把 `CONTEXT_SIZE` 和 `LLAMA_PARALLEL` 一起降，如 `CONTEXT_SIZE=8192` + `LLAMA_PARALLEL=1`（每槽仍是 8192），不要只降 `CONTEXT_SIZE`；还不够就降 `IMAGE_MAX_TOKENS` 或参考下方「关掉视觉」 |
 | 用第二张卡 | `.env` 里改 `GPU_DEVICE_ID=1` |
 | 部分 offload | `.env` 里改 `N_GPU_LAYERS=20`（一般无需，9B 可全量） |
 | 视觉精度不够 | `.env` 里 `LLAMA_PARALLEL=1` + `IMAGE_MAX_TOKENS=6144`（并发降为 1） |
