@@ -20,7 +20,7 @@ services:
     # 镜像 tag 钉死 build 号：浮动 tag server-cuda 每次重新打包拿到的 build 都不确定，
     # 离线环境（docker save/load）下无法复现。b10156 在 2026-07-30 与浮动 tag 同 digest。
     # 视觉能力要求 build >= b9222。
-    image: ${LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda-b10156}
+    image: ${LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda-b9765}
     container_name: Qwen3.5-9B
     restart: unless-stopped
 
