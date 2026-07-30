@@ -35,11 +35,33 @@ export MDIR=$APP/models/Qwen3.5-9B
 
 ### 1.1 下载 mmproj
 
+**推荐：直接 curl，不装任何 Python 包。** 只下一个文件，没必要引入 `huggingface_hub`。
+
 ```bash
 cd $WORK
-pip install -U "huggingface_hub[cli]"
-hf download bartowski/Qwen_Qwen3.5-9B-GGUF mmproj-Qwen_Qwen3.5-9B-f16.gguf --local-dir .
+curl -L --fail --retry 3 --retry-delay 2 -C - \
+  -o mmproj-Qwen_Qwen3.5-9B-f16.gguf \
+  "https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF/resolve/main/mmproj-Qwen_Qwen3.5-9B-f16.gguf"
 ```
+
+`-C -` 是断点续传：876 MiB 断了重跑同一条命令即可接着下，不用从头开始。
+
+<details>
+<summary>如果你更想用 hf CLI（注意 PEP 668）</summary>
+
+Ubuntu 24.04 / Debian 12 起，`pip install` 往系统 Python 装包会被拒绝，报
+`error: externally-managed-environment`。这是 PEP 668 的预期行为，**不要**用
+`--break-system-packages` 绕过。用 venv：
+
+```bash
+python3 -m venv ~/.venv/hf                       # 需要 python3-venv，没有就 sudo apt install python3-venv
+~/.venv/hf/bin/pip install -U "huggingface_hub[cli]"
+~/.venv/hf/bin/hf download bartowski/Qwen_Qwen3.5-9B-GGUF \
+  mmproj-Qwen_Qwen3.5-9B-f16.gguf --local-dir $WORK
+```
+
+或者 `sudo apt install pipx && pipx install "huggingface_hub[cli]"`。
+</details>
 
 **选 f16，不要 bf16。** 两者只差 3 MB，但 CUDA 后端走 f16 是常规路径。
 
