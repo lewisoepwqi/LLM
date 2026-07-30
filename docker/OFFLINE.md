@@ -3,12 +3,13 @@
 服务器无法 `docker pull` / `hf download` / `apt install` 时，思路统一为：
 **在一台有外网 + Docker 的机器上把所有东西打包成文件 → 上传 → 在服务器上加载。**
 
-需要准备 3 类产物，按服务器现状决定要不要第 3 类：
+需要准备 4 类产物，按服务器现状决定要不要第 3 类：
 
 | 产物 | 必须？ | 大小（约） |
 |---|---|---|
 | 1. llama.cpp CUDA 镜像 tar | 是 | 2–4 GB |
 | 2. 模型 GGUF | 是 | ~6.5 GB |
+| 2b. 视觉投影器 mmproj | 想要视觉能力则必须 | ~876 MB |
 | 3. Docker Engine + NVIDIA Container Toolkit 离线包 | 仅当服务器没装 | ~300 MB |
 
 > 先在服务器上判断要不要产物 3：
@@ -26,9 +27,11 @@
 
 ### A1. 镜像
 ```bash
-docker pull --platform linux/amd64 ghcr.io/ggml-org/llama.cpp:server-cuda
-docker save ghcr.io/ggml-org/llama.cpp:server-cuda -o llama-server-cuda.tar
-# 可选压缩：gzip llama-server-cuda.tar   （得到 .tar.gz，传输更小）
+# tag 钉死 build 号，否则每次打包拿到的 build 不确定，离线环境无法复现。
+# 视觉能力要求 >= b9222。这个 tag 要与 .env 里的 LLAMA_IMAGE 一致。
+docker pull --platform linux/amd64 ghcr.io/ggml-org/llama.cpp:server-cuda-b10156
+docker save ghcr.io/ggml-org/llama.cpp:server-cuda-b10156 -o llama-server-cuda-b10156.tar
+# 可选压缩：gzip llama-server-cuda-b10156.tar
 ```
 
 ### A2. 模型
@@ -36,6 +39,11 @@ docker save ghcr.io/ggml-org/llama.cpp:server-cuda -o llama-server-cuda.tar
 pip install -U "huggingface_hub[cli]"
 hf download bartowski/Qwen_Qwen3.5-9B-GGUF Qwen_Qwen3.5-9B-Q5_K_M.gguf --local-dir ./gguf
 # 产物：./gguf/Qwen_Qwen3.5-9B-Q5_K_M.gguf
+
+# 视觉投影器（与主权重同仓库）。不要 mmproj 则跳过，纯文本不受影响。
+hf download bartowski/Qwen_Qwen3.5-9B-GGUF mmproj-Qwen_Qwen3.5-9B-f16.gguf --local-dir ./gguf
+# 产物：./gguf/mmproj-Qwen_Qwen3.5-9B-f16.gguf（918165952 字节）
+# 注意选 f16 不要 bf16 —— 两者只差 3MB，但 CUDA 后端走 f16 是常规路径。
 ```
 
 ### A3.（按需）NVIDIA Container Toolkit 离线包
@@ -72,8 +80,9 @@ foreach ($d in $debs) { Invoke-WebRequest "$base/$d" -OutFile "E:\nvct-debs\$d" 
 
 ```powershell
 # 从 Windows（PowerShell），或有网机器上用 scp
-scp llama-server-cuda.tar          ubuntu@服务器IP:~/app/LLM/
+scp llama-server-cuda-b10156.tar   ubuntu@服务器IP:~/app/LLM/
 scp ./gguf/Qwen_Qwen3.5-9B-Q5_K_M.gguf  ubuntu@服务器IP:~/app/LLM/models/Qwen3.5-9B/
+scp ./gguf/mmproj-Qwen_Qwen3.5-9B-f16.gguf  ubuntu@服务器IP:~/app/LLM/models/Qwen3.5-9B/
 # 如需第 3 类：
 scp docker-offline-debs.tar.gz     ubuntu@服务器IP:~/app/LLM/
 ```
@@ -96,13 +105,16 @@ nvidia-ctk --version               # 有版本号 = 装好
 ### C2. 载入镜像
 ```bash
 cd ~/app/LLM
-docker load -i llama-server-cuda.tar          # 若压过：gunzip -c llama-server-cuda.tar.gz | docker load
-docker images | grep llama.cpp                # 确认 server-cuda 标签在
+docker load -i llama-server-cuda-b10156.tar   # 若压过：gunzip -c llama-server-cuda-b10156.tar.gz | docker load
+docker images | grep llama.cpp                # 确认 server-cuda-b10156 标签在
 ```
 
 ### C3. 确认模型就位
 ```bash
-ls -lh ~/app/LLM/models/Qwen3.5-9B/Qwen_Qwen3.5-9B-Q5_K_M.gguf
+ls -lh ~/app/LLM/models/Qwen3.5-9B/
+# 应看到两个文件：
+#   Qwen_Qwen3.5-9B-Q5_K_M.gguf        7111487520 字节
+#   mmproj-Qwen_Qwen3.5-9B-f16.gguf     918165952 字节
 ```
 
 ### C4. 启动（compose 见镜像已在本地，不会联网拉取）
@@ -120,8 +132,8 @@ bash test_api.sh
 大文件上传后两端比对哈希：
 ```bash
 # 打包机：
-sha256sum llama-server-cuda.tar Qwen_Qwen3.5-9B-Q5_K_M.gguf
+sha256sum llama-server-cuda-b10156.tar Qwen_Qwen3.5-9B-Q5_K_M.gguf mmproj-Qwen_Qwen3.5-9B-f16.gguf
 # 服务器：
-sha256sum ~/app/LLM/llama-server-cuda.tar ~/app/LLM/models/Qwen3.5-9B/Qwen_Qwen3.5-9B-Q5_K_M.gguf
+sha256sum ~/app/LLM/llama-server-cuda-b10156.tar ~/app/LLM/models/Qwen3.5-9B/Qwen_Qwen3.5-9B-Q5_K_M.gguf ~/app/LLM/models/Qwen3.5-9B/mmproj-Qwen_Qwen3.5-9B-f16.gguf
 ```
 两边一致才算传完整。GGUF 损坏会表现为加载报错或输出乱码。

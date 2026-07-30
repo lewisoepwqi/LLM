@@ -27,16 +27,18 @@ LLM 推理服务自包含在一个目录里，合同项目单独放、通过 HTT
     .env
     setup_docker_gpu.sh
     test_api.sh
+    test_vision.sh
   models/
     Qwen3.5-9B/
       Qwen_Qwen3.5-9B-Q5_K_M.gguf
+      mmproj-Qwen_Qwen3.5-9B-f16.gguf    # 视觉投影器，与主权重同目录
 ```
 
 `.env` 里 `MODELS_DIR=../models` 即指向上面的 `models/`（相对 compose 文件解析，不写死用户名）。
 
 ## 为什么 Linux 上用 Docker 而不是源码编译
 
-llama.cpp 官方 release **只为 Windows 提供 CUDA 预编译包**，Linux 只给 CPU 版。所以 Linux 上想用 CUDA，要么源码编译，要么用官方 Docker 镜像（`ghcr.io/ggml-org/llama.cpp:server-cuda`）。镜像已内置 CUDA 运行时，宿主机只要有 NVIDIA 驱动 + nvidia-container-toolkit 即可，最省事。
+llama.cpp 官方 release **只为 Windows 提供 CUDA 预编译包**，Linux 只给 CPU 版。所以 Linux 上想用 CUDA，要么源码编译，要么用官方 Docker 镜像（如 `ghcr.io/ggml-org/llama.cpp:server-cuda-b10156`）。镜像已内置 CUDA 运行时，宿主机只要有 NVIDIA 驱动 + nvidia-container-toolkit 即可，最省事。
 
 ## 步骤
 
@@ -59,6 +61,10 @@ mkdir -p ~/app/LLM/models/Qwen3.5-9B
 # 有网：hf download bartowski/Qwen_Qwen3.5-9B-GGUF Qwen_Qwen3.5-9B-Q5_K_M.gguf \
 #         --local-dir ~/app/LLM/models/Qwen3.5-9B
 # 无网：在有网机器下载后 scp 上传到该目录（见 OFFLINE.md）
+
+# 视觉投影器（876 MiB，与主权重同仓库；不下这个则视觉不可用，纯文本不受影响）
+# 有网：hf download bartowski/Qwen_Qwen3.5-9B-GGUF mmproj-Qwen_Qwen3.5-9B-f16.gguf \
+#         --local-dir ~/app/LLM/models/Qwen3.5-9B
 ls -lh ~/app/LLM/models/Qwen3.5-9B/
 ```
 
@@ -91,6 +97,71 @@ docker compose pull             # 拉取镜像新版本后再 up -d 即可升级
 
 `restart: unless-stopped` 已配置，崩溃/重启机器后会自动拉起，无需额外 systemd。
 
+## 视觉能力
+
+Qwen3.5-9B 本身支持图文输入。服务已加载 `mmproj-Qwen_Qwen3.5-9B-f16.gguf`（876 MiB），
+视觉与文本共用同一个 8080 服务。
+
+### API 契约
+
+**服务端零变更**：还是 `POST /v1/chat/completions`，端口、模型名、`/v1/models`、`/health` 全不变。
+
+**纯文本请求 100% 向后兼容** —— `content` 是字符串时行为与开视觉前完全一致。所以业务后端
+不改也能继续跑，视觉可以先上线、后端后续独立接入，不需要同步发版。
+
+传图时把 `content` 从字符串改为 content-part 数组：
+
+```bash
+IMG=$(base64 -w0 合同扫描件.jpg)
+curl -sS http://127.0.0.1:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"qwen3.5-9b\",
+    \"messages\": [{\"role\": \"user\", \"content\": [
+      {\"type\": \"text\", \"text\": \"提取这张合同扫描件的甲乙方、金额、签订日期\"},
+      {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,${IMG}\"}}
+    ]}],
+    \"chat_template_kwargs\": {\"enable_thinking\": false}
+  }"
+```
+
+### 后端接入约束
+
+1. **必须用 base64 data URI。** llama-server 也支持远程 URL，但那是**服务端**去 fetch，
+   本服务在内网、取不到图。本部署未启用 `--media-path`，`file://` 也不可用
+   （后端不保证与本容器同机，共享挂载卷不成立）。
+2. **base64 膨胀约 33%**：2 MB 的 JPEG → 约 2.7 MB 请求体。llama-server 自身不限体积，
+   但**若链路上有 nginx 反代，须调 `client_max_body_size`**。这是最容易踩的坑。
+3. **`prompt_tokens` 口径变了**，会包含视觉 token。后端若有 token 统计或限流逻辑需重新校准。
+4. **支持格式**：JPEG / PNG / BMP / TGA / GIF。**PDF 需后端自行转图**（如 `pdftoppm -jpeg -r 150`）。
+5. 图片 token 上限由 `IMAGE_MAX_TOKENS` 控制（默认 3072）。单张图超限会被降采样，
+   不会报错，但小字可能糊掉。
+
+### 两档参数
+
+Qwen-VL 动态分辨率约 **784 px ≈ 1 个视觉 token**，A4 扫描件整页约 **1800–2600 token**。
+
+| 档位 | `.env` 配置 | 每槽上下文 | 适用 |
+|---|---|---|---|
+| 默认档 | `LLAMA_PARALLEL=2` `CONTEXT_SIZE=16384` `IMAGE_MAX_TOKENS=3072` | 8192 | 整页扫描件够用，保留 2 路并发 |
+| 高精度档 | `LLAMA_PARALLEL=1` `CONTEXT_SIZE=16384` `IMAGE_MAX_TOKENS=6144` | 16384 | 密集小字 OCR 更准，但并发归零，业务后端 `READ_CONCURRENCY` 须同步降到 1 |
+
+先跑默认档，用真实扫描件测准确率，不够再切高精度档（改 `.env` 两个值 + `docker compose up -d`）。
+
+### 验证
+
+```bash
+bash test_vision.sh          # 单独跑视觉冒烟测试
+bash test_api.sh             # 全量（含视觉）
+```
+
+用一张四象限纯色图断言模型真读到了图，而不只是"请求没报错"。
+
+### 关掉视觉
+
+注释掉 `docker-compose.yml` 里 `--mmproj` / `--image-max-tokens` 那 4 行，
+`docker compose up -d`。服务退回纯文本，显存少占约 0.86 GiB，mmproj 文件留在磁盘上无副作用。
+
 ## 调参对照（与 Windows 版一致的语义）
 
 | 需求 | 改法 |
@@ -100,6 +171,9 @@ docker compose pull             # 拉取镜像新版本后再 up -d 即可升级
 | 显存吃紧 | `.env` 里降 `CONTEXT_SIZE=4096` |
 | 用第二张卡 | `.env` 里改 `GPU_DEVICE_ID=1` |
 | 部分 offload | `.env` 里改 `N_GPU_LAYERS=20`（一般无需，9B 可全量） |
+| 视觉精度不够 | `.env` 里 `LLAMA_PARALLEL=1` + `IMAGE_MAX_TOKENS=6144`（并发降为 1） |
+| 关掉视觉 | 注释掉 compose 里 `--mmproj` / `--image-max-tokens` 4 行 |
+| 升级 llama.cpp | `.env` 里改 `LLAMA_IMAGE=...:server-cuda-bNNNNN`（离线需先 save/load 新镜像） |
 
 ## 排错
 
@@ -107,6 +181,13 @@ docker compose pull             # 拉取镜像新版本后再 up -d 即可升级
 - **容器一直 unhealthy / 拉不起**：`docker compose logs` 看是不是模型路径错了。确认 `MODELS_DIR` 下确实有 `MODEL_FILE` 指向的文件。
 - **WSL/局域网访问不到**：服务绑定容器内 `0.0.0.0:8080`，宿主机映射到 `LLAMA_SERVER_PORT`。检查服务器防火墙是否放行该端口。
 - **首个 token 慢**：模型加载需时间，`start_period` 已给 120s。加载完后 GPU 推理应为 30-60+ tok/s。
+- **视觉请求报 multimodal 相关错误**：`--mmproj` 没生效。`docker compose config | grep mmproj`
+  确认参数渲染出来了，再 `ls -lh models/Qwen3.5-9B/mmproj-*` 确认文件在（应为 918165952 字节）。
+- **视觉请求 200 但模型说看不到图**：多半是镜像 build 太老。
+  `docker exec Qwen3.5-9B /app/llama-server --version` 确认 >= b9222，否则重打包镜像。
+- **视觉请求报上下文不够 / 输出被截断**：每槽上下文 = `CONTEXT_SIZE / LLAMA_PARALLEL`，
+  要同时装下图片(<=`IMAGE_MAX_TOKENS`)+正文+输出。降 `IMAGE_MAX_TOKENS` 或降 `LLAMA_PARALLEL`。
+- **请求体过大被拒（413）**：base64 比原图大约 1/3。若前面有 nginx 反代，调 `client_max_body_size`。
 
 ## 备选：纯 docker run（不用 compose）
 
@@ -114,8 +195,11 @@ docker compose pull             # 拉取镜像新版本后再 up -d 即可升级
 docker run -d --name contract_radar_llm --restart unless-stopped \
   --gpus '"device=0"' -p 8080:8080 \
   -v /models:/models:ro \
-  ghcr.io/ggml-org/llama.cpp:server-cuda \
+  ghcr.io/ggml-org/llama.cpp:server-cuda-b10156 \
   -m /models/Qwen3.5-9B/Qwen_Qwen3.5-9B-Q5_K_M.gguf \
-  -ngl 99 -c 8192 --host 0.0.0.0 --port 8080 \
+  --mmproj /models/Qwen3.5-9B/mmproj-Qwen_Qwen3.5-9B-f16.gguf \
+  --image-max-tokens 3072 \
+  -ngl 99 -c 16384 --parallel 2 --cont-batching \
+  --host 0.0.0.0 --port 8080 \
   --chat-template-kwargs '{"enable_thinking":false}'
 ```
