@@ -162,6 +162,9 @@ bash test_api.sh             # 全量（含视觉）
 
 用一张四象限纯色图断言模型真读到了图，而不只是"请求没报错"。
 
+> **首次开启视觉、要上线到服务器**：照 [`RUNBOOK-vision.md`](RUNBOOK-vision.md) 走，
+> 里面是逐条带预期输出和排错分支的操作清单（含镜像 tag 名这个最容易踩的坑）。
+
 ### 关掉视觉
 
 注释掉 `docker-compose.yml` 里 `--mmproj` / `--image-max-tokens` 那 4 行，
