@@ -40,7 +40,10 @@ pip install -U "huggingface_hub[cli]"
 hf download bartowski/Qwen_Qwen3.5-9B-GGUF Qwen_Qwen3.5-9B-Q5_K_M.gguf --local-dir ./gguf
 # 产物：./gguf/Qwen_Qwen3.5-9B-Q5_K_M.gguf
 
-# 视觉投影器（与主权重同仓库）。不要 mmproj 则跳过，纯文本不受影响。
+# 视觉投影器（与主权重同仓库）。
+# 注意：compose 默认无条件传 --mmproj。如果不打包/不上传这个文件，必须同时注释掉
+# docker-compose.yml 里 --mmproj / 路径 / --image-max-tokens / 值 那 4 行，否则文件缺失
+# 会导致 llama-server 加载阶段直接失败、容器起不来——纯文本也用不了。两者要一起做。
 hf download bartowski/Qwen_Qwen3.5-9B-GGUF mmproj-Qwen_Qwen3.5-9B-f16.gguf --local-dir ./gguf
 # 产物：./gguf/mmproj-Qwen_Qwen3.5-9B-f16.gguf（918165952 字节）
 # 注意选 f16 不要 bf16 —— 两者只差 3MB，但 CUDA 后端走 f16 是常规路径。
@@ -108,6 +111,15 @@ cd ~/app/LLM
 docker load -i llama-server-cuda-b10156.tar   # 若压过：gunzip -c llama-server-cuda-b10156.tar.gz | docker load
 docker images | grep llama.cpp                # 确认 server-cuda-b10156 标签在
 ```
+
+> **如果服务器上早先是用浮动 tag `server-cuda` 打包载入的镜像**（改动前的本文档就是这么
+> 写的，那台服务器上很可能就是这个状态）：`docker images` 里看到的 tag 名会是裸的
+> `server-cuda`，跟 compose 现在钉死的 `server-cuda-b10156` 对不上。即使这个旧镜像的
+> build 号已经够新、视觉功能能用，tag 名不对，`docker compose up -d` 照样会因为找不到
+> `server-cuda-b10156` 这个本地镜像而失败（服务器无外网，拉不到）。三选一处理：
+> - 按上面 A1 重新打包 `server-cuda-b10156` 并 `docker load`；
+> - 或者给已有镜像打个别名：`docker tag ghcr.io/ggml-org/llama.cpp:server-cuda ghcr.io/ggml-org/llama.cpp:server-cuda-b10156`；
+> - 或者把 `.env` 里的 `LLAMA_IMAGE` 改成本地实际存在的 tag（如 `server-cuda`），不用钉死名。
 
 ### C3. 确认模型就位
 ```bash

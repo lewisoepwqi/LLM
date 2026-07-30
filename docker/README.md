@@ -62,7 +62,11 @@ mkdir -p ~/app/LLM/models/Qwen3.5-9B
 #         --local-dir ~/app/LLM/models/Qwen3.5-9B
 # 无网：在有网机器下载后 scp 上传到该目录（见 OFFLINE.md）
 
-# 视觉投影器（876 MiB，与主权重同仓库；不下这个则视觉不可用，纯文本不受影响）
+# 视觉投影器（876 MiB，与主权重同仓库）。
+# 注意：compose 默认无条件传 --mmproj，不下载这个文件的话必须同时注释掉
+# docker-compose.yml 里 --mmproj / 路径 / --image-max-tokens / 值 那 4 行（见下方
+# 「关掉视觉」），否则 llama-server 加载阶段就会因为文件缺失而报错、容器起不来——
+# 连纯文本也用不了。只有「不下载 mmproj」+「注释掉 4 行」两件事一起做，纯文本才不受影响。
 # 有网：hf download bartowski/Qwen_Qwen3.5-9B-GGUF mmproj-Qwen_Qwen3.5-9B-f16.gguf \
 #         --local-dir ~/app/LLM/models/Qwen3.5-9B
 ls -lh ~/app/LLM/models/Qwen3.5-9B/
@@ -163,6 +167,9 @@ bash test_api.sh             # 全量（含视觉）
 注释掉 `docker-compose.yml` 里 `--mmproj` / `--image-max-tokens` 那 4 行，
 `docker compose up -d`。服务退回纯文本，显存少占约 0.86 GiB，mmproj 文件留在磁盘上无副作用。
 
+回滚后再跑 `bash test_api.sh`，末尾的视觉冒烟测试**会失败**——这是预期行为（mmproj 已经
+关掉了），只要前面的 `/v1/models`、纯文本回答、显存占用检查都通过即可，不用管视觉那步的失败。
+
 ## 调参对照（与 Windows 版一致的语义）
 
 | 需求 | 改法 |
@@ -189,6 +196,12 @@ bash test_api.sh             # 全量（含视觉）
 - **视觉请求报上下文不够 / 输出被截断**：每槽上下文 = `CONTEXT_SIZE / LLAMA_PARALLEL`，
   要同时装下图片(<=`IMAGE_MAX_TOKENS`)+正文+输出。降 `IMAGE_MAX_TOKENS` 或降 `LLAMA_PARALLEL`。
 - **请求体过大被拒（413）**：base64 比原图大约 1/3。若前面有 nginx 反代，调 `client_max_body_size`。
+- **`docker compose up -d` 报找不到镜像 / 卡在尝试联网拉取**：`LLAMA_IMAGE` 钉死的 tag
+  （默认 `server-cuda-b10156`）在本机 `docker images` 里不存在——最常见的原因是这台服务器
+  之前是用浮动 tag `server-cuda` 打包载入的镜像，tag 名对不上钉死名，无外网也拉不下来。
+  `docker images | grep llama.cpp` 确认本地实际 tag 名，然后二选一：
+  `docker tag` 给现有镜像打别名成 `server-cuda-b10156`，或把 `.env` 里 `LLAMA_IMAGE`
+  改成本地实际存在的 tag。
 
 ## 备选：纯 docker run（不用 compose）
 

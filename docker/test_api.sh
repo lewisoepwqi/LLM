@@ -25,7 +25,7 @@ curl -fsS "${BASE_URL}/chat/completions" \
   }"
 echo ""
 echo ""
-echo "==> 显存占用（确认模型确实在 GPU 上，应见 ~8-9GB）"
+echo "==> 显存占用（确认模型确实在 GPU 上，应见 ~9-10GB；关掉视觉后降回 ~8-9GB）"
 nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv
 
 echo ""
