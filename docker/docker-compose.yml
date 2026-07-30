@@ -17,7 +17,10 @@ name: qwen3-5-9b
 
 services:
   llama-server:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    # 镜像 tag 钉死 build 号：浮动 tag server-cuda 每次重新打包拿到的 build 都不确定，
+    # 离线环境（docker save/load）下无法复现。b10156 在 2026-07-30 与浮动 tag 同 digest。
+    # 视觉能力要求 build >= b9222。
+    image: ${LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda-b10156}
     container_name: Qwen3.5-9B
     restart: unless-stopped
 
@@ -55,6 +58,17 @@ services:
       - "--parallel"
       - "${LLAMA_PARALLEL:-2}"
       - "--cont-batching"
+      # ---- 视觉能力（多模态投影器）----
+      # mmproj 与主权重同在 bartowski/Qwen_Qwen3.5-9B-GGUF 仓库，放同一个目录。
+      # CUDA 后端选 f16（bf16 只差 3MB，但 f16 是常规路径）。默认会 offload 到 GPU。
+      # 临时关掉视觉：注释掉下面这 4 行，docker compose up -d 即退回纯文本，
+      # mmproj 文件留在磁盘上无副作用。
+      - "--mmproj"
+      - "/models/${MMPROJ_FILE:-Qwen3.5-9B/mmproj-Qwen_Qwen3.5-9B-f16.gguf}"
+      # 每图视觉 token 上限。Qwen-VL 动态分辨率约 784px≈1token，A4 扫描件整页约
+      # 1800-2600 token。3072 给整页留足余量，且与每槽 8192 里的正文+输出预算不冲突。
+      - "--image-max-tokens"
+      - "${IMAGE_MAX_TOKENS:-3072}"
       - "--host"
       - "0.0.0.0"
       - "--port"
