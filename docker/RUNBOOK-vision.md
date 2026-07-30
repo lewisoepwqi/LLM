@@ -313,23 +313,35 @@ cd $APP/docker && bash test_vision.sh
 
 ### 4.3 真实合同扫描件（这一步是决策依据，不是走过场）
 
+**先用自带的合成测试件跑一遍**——它是 A4 @ 200 DPI（1654×2339，约 4900 视觉 token，
+会被截到 3072，即满载），带标准答案，脚本会自动打分，同时高频采样显存峰值：
+
 ```bash
-cd $APP
-IMG=$(base64 -w0 你的合同扫描件.jpg)
-curl -sS http://127.0.0.1:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"qwen3.5-9b\",
-    \"messages\": [{\"role\": \"user\", \"content\": [
-      {\"type\": \"text\", \"text\": \"提取这张合同扫描件的甲方、乙方、合同金额、签订日期，用 JSON 输出\"},
-      {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,${IMG}\"}}
-    ]}],
-    \"chat_template_kwargs\": {\"enable_thinking\": false}
-  }"
+cd $APP/docker
+bash test_vision_peak.sh testdata/contract_scan.png
 ```
 
-人工核对四个字段。**默认档 3072 token 够不够读清你们实际 DPI 和字号的扫描件，
-只能实测，猜没有意义。**
+**预期**：`prompt_tokens` 约 3000（证明 `--image-max-tokens` 吃满了）、字段 6/6 命中。
+标准答案和更多可核对字段见 [`testdata/README.md`](testdata/README.md)。
+
+**再换你自己的真实扫描件**：
+
+```bash
+bash test_vision_peak.sh /path/to/你的合同扫描件.jpg
+```
+
+换成真实件后不会自动打分（脚本只认自带那张），需人工核对输出。
+
+> **想手写 curl 的话，请求体必须写进文件再用 `--data-binary @文件`**，不能把 base64
+> 拼进 `-d "..."`：Linux 单个命令行参数上限 128 KiB，A4 扫描件 base64 后有几百 KiB，
+> 内联会直接报 `参数列表过长`。写法见 [`README.md`](README.md) 的「视觉能力」章节。
+> 这个限制只影响 shell；业务后端用 SDK 发请求不受影响。
+
+**默认档 3072 token 够不够读清你们实际 DPI 和字号的扫描件，只能实测，猜没有意义。**
+
+判读时注意：**公司名、日期这类字段模型靠语言先验就能补全，糊了也可能蒙对**，区分度低。
+真正能反映小字 OCR 质量的是长数字串——统一社会信用代码（18 位混合字母数字）、
+带千分位的金额、规格型号。要评估准确率就重点问这些。
 
 准确率不够 → 切高精度档（见下方「两档参数怎么切」）→ 回 4.1 重跑一遍 4.1–4.3。
 
