@@ -35,18 +35,38 @@ docker save ghcr.io/ggml-org/llama.cpp:server-cuda-b10156 -o llama-server-cuda-b
 ```
 
 ### A2. 模型
+
+用 curl 直接下，不装任何 Python 包 —— Ubuntu 24.04 / Debian 12 起 `pip install` 往系统
+Python 装包会被 PEP 668 拒绝（`error: externally-managed-environment`），而这里只是下两个
+文件，没必要为此折腾 venv。`-C -` 支持断点续传，几 GB 的文件断了重跑同一条命令即可。
+
 ```bash
-pip install -U "huggingface_hub[cli]"
-hf download bartowski/Qwen_Qwen3.5-9B-GGUF Qwen_Qwen3.5-9B-Q5_K_M.gguf --local-dir ./gguf
-# 产物：./gguf/Qwen_Qwen3.5-9B-Q5_K_M.gguf
+mkdir -p ./gguf
+BASE=https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF/resolve/main
+
+curl -L --fail --retry 3 --retry-delay 2 -C - -o ./gguf/Qwen_Qwen3.5-9B-Q5_K_M.gguf \
+  "$BASE/Qwen_Qwen3.5-9B-Q5_K_M.gguf"
+# 产物：./gguf/Qwen_Qwen3.5-9B-Q5_K_M.gguf（7111487520 字节）
 
 # 视觉投影器（与主权重同仓库）。
 # 注意：compose 默认无条件传 --mmproj。如果不打包/不上传这个文件，必须同时注释掉
 # docker-compose.yml 里 --mmproj / 路径 / --image-max-tokens / 值 那 4 行，否则文件缺失
 # 会导致 llama-server 加载阶段直接失败、容器起不来——纯文本也用不了。两者要一起做。
-hf download bartowski/Qwen_Qwen3.5-9B-GGUF mmproj-Qwen_Qwen3.5-9B-f16.gguf --local-dir ./gguf
+curl -L --fail --retry 3 --retry-delay 2 -C - -o ./gguf/mmproj-Qwen_Qwen3.5-9B-f16.gguf \
+  "$BASE/mmproj-Qwen_Qwen3.5-9B-f16.gguf"
 # 产物：./gguf/mmproj-Qwen_Qwen3.5-9B-f16.gguf（918165952 字节）
 # 注意选 f16 不要 bf16 —— 两者只差 3MB，但 CUDA 后端走 f16 是常规路径。
+```
+
+下完立刻对上游官方 sha256 校验（HF 仓库 LFS 元数据里的值），对不上就重下，别往下走：
+
+```bash
+sha256sum ./gguf/Qwen_Qwen3.5-9B-Q5_K_M.gguf ./gguf/mmproj-Qwen_Qwen3.5-9B-f16.gguf
+```
+
+```text
+a686d88ec1e6881f9bf161526826cd6d6874b7f0e80e0f79acf6144a132c5d7e  Qwen_Qwen3.5-9B-Q5_K_M.gguf
+97f420245a85ce129bb764e86a5e21e27d782fe6d6056c6839b9c5fdb8f38289  mmproj-Qwen_Qwen3.5-9B-f16.gguf
 ```
 
 ### A3.（按需）NVIDIA Container Toolkit 离线包
@@ -141,11 +161,29 @@ bash test_api.sh
 ---
 
 ## 校验完整性（避免传输损坏）
-大文件上传后两端比对哈希：
+
+**两个 GGUF 直接对上游官方哈希**（A2 已给出，服务器侧再验一次即可，不必和打包机比）：
+
 ```bash
-# 打包机：
-sha256sum llama-server-cuda-b10156.tar Qwen_Qwen3.5-9B-Q5_K_M.gguf mmproj-Qwen_Qwen3.5-9B-f16.gguf
-# 服务器：
-sha256sum ~/app/LLM/llama-server-cuda-b10156.tar ~/app/LLM/models/Qwen3.5-9B/Qwen_Qwen3.5-9B-Q5_K_M.gguf ~/app/LLM/models/Qwen3.5-9B/mmproj-Qwen_Qwen3.5-9B-f16.gguf
+cd ~/app/LLM/models/Qwen3.5-9B
+sha256sum Qwen_Qwen3.5-9B-Q5_K_M.gguf mmproj-Qwen_Qwen3.5-9B-f16.gguf
 ```
+
+```text
+a686d88ec1e6881f9bf161526826cd6d6874b7f0e80e0f79acf6144a132c5d7e  Qwen_Qwen3.5-9B-Q5_K_M.gguf
+97f420245a85ce129bb764e86a5e21e27d782fe6d6056c6839b9c5fdb8f38289  mmproj-Qwen_Qwen3.5-9B-f16.gguf
+```
+
+> 对上游比而不是「打包机自己算一遍再和服务器比」：后者只能发现**传输**损坏，
+> 发现不了下载时就拿错了文件或下了个截断的。
+
+**镜像 tar 没有上游哈希，只能两端比对**（注意打包机上的路径 —— A1 产出在当前目录）：
+
+```bash
+# 打包机（在 A1 执行的目录下）：
+sha256sum llama-server-cuda-b10156.tar
+# 服务器：
+sha256sum ~/app/LLM/llama-server-cuda-b10156.tar
+```
+
 两边一致才算传完整。GGUF 损坏会表现为加载报错或输出乱码。
