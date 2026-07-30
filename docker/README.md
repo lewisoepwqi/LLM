@@ -12,7 +12,28 @@ NVIDIA Driver 535.309.01 / CUDA 12.2
 2x NVIDIA RTX A4000 16GB
 ```
 
-策略：**单卡（GPU 0）全量 offload**。Qwen3.5-9B Q5_K_M 权重 ~6.5GB + 视觉投影器 mmproj ~0.86GB + KV cache ~1-2GB，单张 16GB A4000 仍富余，第二张卡留作备用。
+策略：**单卡（GPU 0）全量 offload**。Qwen3.5-9B Q5_K_M 权重 ~6.5GB + 视觉投影器 mmproj ~0.86GB + KV cache ~1-2GB，单张 16GB A4000 仍富余。
+
+## 整机 GPU 分配（2026-07-30 腾挪后实测）
+
+本机 2× RTX A4000 16GB，腾挪后多服务共卡。**本服务在 GPU 0，实测占用约 8,132 MiB**。
+
+| GPU | 服务 | 实测占用 |
+|---|---|---|
+| **0** | **Qwen3.5-9B（本服务，llama.cpp，镜像钉 tag）** | **约 8,132 MiB** |
+| 0 | bge-reranker-v2-m3（llama.cpp 重排） | 514 MiB |
+| 0 | Qwen3-Embedding-0.6B（llama.cpp 嵌入） | 约 3,838 MiB |
+| 1 | PaddleOCR（OCR 服务） | 空闲 382 / **生产峰值 6,926** |
+| 1 | Rerank-VL（vLLM，Qwen3-VL-Reranker-2B） | 池子约 7,860（util 0.48） |
+
+GPU 0 合计约 12.5GB / 16GB，GPU 1 合计约 9.7GB / 16GB。共卡要点：同卡的 PaddleOCR 是
+**按需分配**型（生产 `/ingest` 峰值 6,926 MiB，但空闲只有几百 MiB），给同卡服务规划显存时
+必须按各自**生产峰值**预留，不能看空闲值（详见 `~/app/OCR` README 的显存画像）。
+
+> **为什么把镜像 tag 钉死（如 `server-cuda-b9765`）而不是用浮动 `server-cuda`？**
+> 浮动 tag 会被上游随时重新打点——一次与代码无关的 `docker pull` 就可能把镜像换成另一个 build，
+> 行为悄然变化，**下次重启才炸**。钉到具体 build 号保证部署可复现。同机的 Rerank 服务目前还在用
+> 浮动 tag `server-cuda`，是一个已知的待整改项（需验证具体 build 号后再钉，不能擅自换运行时）。
 
 > **离线 / 内网服务器**（无法 `docker pull`、`hf download`、`apt install`）请看 [`OFFLINE.md`](OFFLINE.md)：在有网机器上把镜像、模型、依赖打包成文件，再上传 `docker load`。本文下面的步骤默认服务器有外网。
 
@@ -197,8 +218,9 @@ docker compose up -d
 ### 实测记录（2026-07-30 上线）
 
 环境：`ubuntu-PowerEdge-R750`，2× RTX A4000 16376 MiB，driver 535.309.01 / CUDA 12.2。
-**GPU 0 非独占**——同卡还跑着 `bge-reranker-v2-m3`（556 MiB）和桌面会话（13 MiB）；
-GPU 1 上是 `Qwen3-Embedding-0.6B` 和 `PaddleOCR`。
+**GPU 0 非独占**——同卡还跑着 `bge-reranker-v2-m3`、`Qwen3-Embedding-0.6B`（腾挪后三者同在 GPU 0，
+当前布局见上方「整机 GPU 分配」）。下面是上线当时（腾挪前）的快照：同卡还有 `bge-reranker-v2-m3`
+（556 MiB）和桌面会话（13 MiB）；当时 GPU 1 上是 `Qwen3-Embedding-0.6B` 和 `PaddleOCR`。
 
 | 项 | 实测值 |
 |---|---|
