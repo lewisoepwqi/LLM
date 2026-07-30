@@ -50,7 +50,8 @@ curl -L --fail --retry 3 --retry-delay 2 -C - -o ./gguf/Qwen_Qwen3.5-9B-Q5_K_M.g
 
 # 视觉投影器（与主权重同仓库）。
 # 注意：compose 默认无条件传 --mmproj。如果不打包/不上传这个文件，必须同时注释掉
-# docker-compose.yml 里 --mmproj / 路径 / --image-max-tokens / 值 那 4 行，否则文件缺失
+# docker-compose.yml 里 --mmproj / 路径 / --image-min-tokens / 值 / --image-max-tokens / 值
+# 那 6 行，否则文件缺失
 # 会导致 llama-server 加载阶段直接失败、容器起不来——纯文本也用不了。两者要一起做。
 curl -L --fail --retry 3 --retry-delay 2 -C - -o ./gguf/mmproj-Qwen_Qwen3.5-9B-f16.gguf \
   "$BASE/mmproj-Qwen_Qwen3.5-9B-f16.gguf"

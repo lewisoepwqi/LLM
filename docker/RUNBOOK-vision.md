@@ -361,13 +361,21 @@ grep -c PASS /tmp/v1.log /tmp/v2.log
 
 ```bash
 cd $APP/docker
-sed -i.rollbaktest 's|^      - "--mmproj"|#&|; s|^      - "/models/${MMPROJ_FILE|#&|; s|^      - "--image-max-tokens"|#&|; s|^      - "${IMAGE_MAX_TOKENS|#&|' docker-compose.yml
-docker compose config | grep -c mmproj          # 预期输出 0
-mv docker-compose.yml.rollbaktest docker-compose.yml   # 立刻恢复
-docker compose config | grep -c mmproj          # 预期输出 >0，确认恢复了
+# 从 --mmproj 那行到 IMAGE_MAX_TOKENS 那行整段注释（共 6 行；中间的注释行不受影响）
+sed -i.rollbaktest '/^      - "--mmproj"/,/IMAGE_MAX_TOKENS/ s|^      - |#      - |' docker-compose.yml
+
+grep -c '^#      - ' docker-compose.yml                        # 预期 6
+docker compose config >/dev/null && echo "注释后 YAML 仍合法"
+docker compose config | grep -c 'mmproj\|image-min\|image-max' # 预期 0
+
+mv docker-compose.yml.rollbaktest docker-compose.yml           # 立刻恢复
+docker compose config | grep -c 'mmproj\|image-min\|image-max' # 预期 4，确认恢复了
 ```
 
 > 只验证渲染，不重启容器，服务不中断。
+>
+> 用范围匹配（`/起/,/止/`）而不是逐行列举，是因为视觉参数以后可能增减——
+> 列举式的 sed 每加一个参数就得同步改一次，漏改了会静默地只注释掉一部分。
 
 ---
 
@@ -421,7 +429,7 @@ docker compose config | grep -c mmproj          # 预期输出 >0，确认恢复
 
 ```bash
 cd $APP/docker
-# 注释掉 docker-compose.yml 里 --mmproj / 路径 / --image-max-tokens / 值 这 4 行
+# 注释掉 docker-compose.yml 里视觉相关的 6 行（--mmproj / --image-min-tokens / --image-max-tokens 及各自的值）
 docker compose up -d
 bash test_api.sh
 ```
