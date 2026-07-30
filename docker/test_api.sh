@@ -27,3 +27,7 @@ echo ""
 echo ""
 echo "==> 显存占用（确认模型确实在 GPU 上，应见 ~8-9GB）"
 nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv
+
+echo ""
+echo "==> 视觉冒烟测试（确认 mmproj 已加载且模型能读图）"
+BASE_URL="${BASE_URL}" MODEL="${MODEL}" bash "$(dirname "$0")/test_vision.sh"
