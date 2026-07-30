@@ -116,19 +116,28 @@ Qwen3.5-9B 本身支持图文输入。服务已加载 `mmproj-Qwen_Qwen3.5-9B-f1
 
 传图时把 `content` 从字符串改为 content-part 数组：
 
+用 curl 手工验证时，**必须把请求体写进文件再用 `--data-binary @文件`**，不能把 base64
+拼进 `-d "..."`：Linux 单个命令行参数上限 128 KiB，而一张 A4 扫描件 base64 后有几百 KiB，
+内联会直接报 `参数列表过长 / Argument list too long`。
+
 ```bash
-IMG=$(base64 -w0 合同扫描件.jpg)
+P=$(mktemp)
+{
+  printf '{"model":"qwen3.5-9b","temperature":0,'
+  printf '"chat_template_kwargs":{"enable_thinking":false},'
+  printf '"messages":[{"role":"user","content":[{"type":"text","text":'
+  printf '"提取这张合同扫描件的甲乙方、金额、签订日期，用 JSON 输出"},'
+  printf '{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,'
+  base64 -w0 合同扫描件.jpg
+  printf '"}}]}]}'
+} > "$P"
 curl -sS http://127.0.0.1:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"qwen3.5-9b\",
-    \"messages\": [{\"role\": \"user\", \"content\": [
-      {\"type\": \"text\", \"text\": \"提取这张合同扫描件的甲乙方、金额、签订日期\"},
-      {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,${IMG}\"}}
-    ]}],
-    \"chat_template_kwargs\": {\"enable_thinking\": false}
-  }"
+  -H "Content-Type: application/json" --data-binary "@$P"
+rm -f "$P"
 ```
+
+> 这个限制只影响 shell 命令行。**业务后端用 SDK / HTTP 客户端发请求不受影响**——
+> 请求体走的是 socket，不经过 `exec` 的参数表。
 
 ### 后端接入约束
 

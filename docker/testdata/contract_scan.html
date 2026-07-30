@@ -1,0 +1,93 @@
+<meta charset="utf-8">
+<style>
+  @page { margin: 0 }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1654px; height: 2339px;      /* A4 @ 200 DPI */
+    background: #fdfdfb;
+    font-family: "WenQuanYi Zen Hei", "Noto Sans CJK SC", sans-serif;
+    color: #1a1a1a;
+    padding: 120px 130px;
+    box-sizing: border-box;
+    /* 扫描件质感：轻微灰度 + 极轻模糊，模拟 200dpi 扫描的边缘软化 */
+    filter: grayscale(0.85) contrast(1.06) blur(0.35px);
+  }
+  h1 { font-size: 46px; text-align: center; letter-spacing: 8px; margin: 0 0 14px; }
+  .sub { text-align: center; font-size: 20px; color: #444; margin-bottom: 40px; letter-spacing: 2px; }
+  .row { font-size: 21px; line-height: 1.9; }
+  .party { border: 1px solid #999; padding: 18px 22px; margin-bottom: 18px; }
+  .party b { font-size: 23px; }
+  h2 { font-size: 25px; margin: 26px 0 10px; }
+  p.clause { font-size: 19px; line-height: 1.85; text-align: justify; margin: 6px 0; text-indent: 2em; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 19px; }
+  th, td { border: 1px solid #888; padding: 9px 10px; }
+  th { background: #eee; }
+  td.num { text-align: right; }
+  .total { font-size: 23px; margin: 18px 0; }
+  .total b { letter-spacing: 1px; }
+  .sign { display: flex; justify-content: space-between; margin-top: 60px; font-size: 21px; }
+  .sign div { width: 44%; line-height: 2.4; }
+  .seal {
+    position: absolute; right: 190px; bottom: 210px;
+    width: 210px; height: 210px; border: 6px solid #b02020; border-radius: 50%;
+    color: #b02020; font-size: 21px; text-align: center; line-height: 1.35;
+    padding-top: 62px; box-sizing: border-box; transform: rotate(-14deg); opacity: .78;
+  }
+  .fine { font-size: 16px; color: #333; line-height: 1.7; margin-top: 10px; }
+</style>
+
+<h1>设备采购合同</h1>
+<div class="sub">合同编号：HT-2026-0715-037</div>
+
+<div class="party row">
+  <b>甲方（采购方）：杭州云图信息技术有限公司</b><br>
+  住所：浙江省杭州市余杭区文一西路 998 号海创园 5 幢 12 层　　统一社会信用代码：91330110MA2H8K4X7Q<br>
+  法定代表人：陈立坤　　联系人：周敏　　联系电话：0571-8823-6641
+</div>
+
+<div class="party row">
+  <b>乙方（供货方）：南京恒信机电设备有限公司</b><br>
+  住所：江苏省南京市江宁区将军大道 289 号科创大厦 A 座 8 层　　统一社会信用代码：91320115MA1P2N9D3F<br>
+  法定代表人：李文博　　联系人：吴桐　　联系电话：025-5217-9930
+</div>
+
+<h2>第一条　标的物及价款</h2>
+<table>
+  <tr><th>序号</th><th>设备名称</th><th>规格型号</th><th>数量</th><th>单价（元）</th><th>金额（元）</th></tr>
+  <tr><td>1</td><td>工业视觉检测仪</td><td>HX-VT800</td><td>6</td><td class="num">128,000.00</td><td class="num">768,000.00</td></tr>
+  <tr><td>2</td><td>高精度伺服控制器</td><td>SC-4200A</td><td>12</td><td class="num">27,500.00</td><td class="num">330,000.00</td></tr>
+  <tr><td>3</td><td>光源模组及支架套件</td><td>LM-330K</td><td>24</td><td class="num">6,600.00</td><td class="num">158,400.00</td></tr>
+  <tr><td>4</td><td>安装调试及技术培训</td><td>—</td><td>1</td><td class="num">30,000.00</td><td class="num">30,000.00</td></tr>
+</table>
+
+<div class="total">合同总金额（小写）：<b>￥1,286,400.00</b>　　（大写）：<b>人民币壹佰贰拾捌万陆仟肆佰元整</b></div>
+
+<h2>第二条　交付与验收</h2>
+<p class="clause">乙方应于本合同生效之日起四十五（45）个日历日内，将全部标的物运抵甲方指定地点（浙江省杭州市余杭区文一西路 998 号海创园 5 幢 1 层收货区），运输及保险费用由乙方承担。甲方应在货到之日起十（10）个工作日内组织验收，验收标准以本合同附件一《技术规格书》及国家现行相关标准为准。</p>
+<p class="clause">验收不合格的，乙方应在接到甲方书面通知后七（7）个工作日内免费更换或修复；逾期未予处理的，甲方有权自行处理，由此产生的全部费用由乙方承担，并按未达标部分金额的百分之十五（15%）向甲方支付违约金。</p>
+
+<h2>第三条　付款方式</h2>
+<p class="clause">本合同价款分三期支付：合同生效后五（5）个工作日内，甲方向乙方支付合同总金额的百分之三十（30%）作为预付款，计人民币叁拾捌万伍仟玖佰贰拾元整（￥385,920.00）；验收合格后十五（15）个工作日内支付百分之六十（60%），计人民币柒拾柒万壹仟捌佰肆拾元整（￥771,840.00）；剩余百分之十（10%）计人民币壹拾贰万捌仟陆佰肆拾元整（￥128,640.00）作为质量保证金，于质保期届满且无质量异议后三十（30）日内无息付清。</p>
+
+<h2>第四条　质量保证</h2>
+<p class="clause">质保期自验收合格之日起计算，为期二十四（24）个月。质保期内因乙方原因导致的故障，乙方应在接到通知后二十四（24）小时内响应，四十八（48）小时内到达现场处理，相关费用由乙方承担。</p>
+
+<h2>第五条　违约责任</h2>
+<p class="clause">乙方逾期交货的，每逾期一日应按合同总金额的万分之五（0.5‰）向甲方支付违约金，累计不超过合同总金额的百分之十（10%）；逾期超过三十（30）日的，甲方有权解除合同并要求乙方赔偿全部损失。甲方逾期付款的，参照前述标准向乙方支付违约金。</p>
+
+<p class="fine">第六条　本合同未尽事宜，双方另行协商并签订书面补充协议，补充协议与本合同具有同等法律效力。因履行本合同发生争议的，双方应友好协商解决；协商不成的，任何一方均可向合同签订地人民法院提起诉讼。本合同一式肆份，甲乙双方各执贰份，自双方法定代表人或授权代表签字并加盖公章之日起生效。</p>
+
+<div class="sign row">
+  <div>
+    甲方（盖章）：杭州云图信息技术有限公司<br>
+    授权代表签字：＿＿＿＿＿＿＿＿＿＿<br>
+    签订日期：2026 年 7 月 15 日
+  </div>
+  <div>
+    乙方（盖章）：南京恒信机电设备有限公司<br>
+    授权代表签字：＿＿＿＿＿＿＿＿＿＿<br>
+    签订日期：2026 年 7 月 15 日
+  </div>
+</div>
+
+<div class="seal">南京恒信机电<br>设备有限公司<br>合同专用章</div>
