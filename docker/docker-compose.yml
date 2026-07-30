@@ -61,10 +61,15 @@ services:
       # ---- 视觉能力（多模态投影器）----
       # mmproj 与主权重同在 bartowski/Qwen_Qwen3.5-9B-GGUF 仓库，放同一个目录。
       # CUDA 后端选 f16（bf16 只差 3MB，但 f16 是常规路径）。默认会 offload 到 GPU。
-      # 临时关掉视觉：注释掉下面这 4 行，docker compose up -d 即退回纯文本，
+      # 临时关掉视觉：注释掉下面这 6 行，docker compose up -d 即退回纯文本，
       # mmproj 文件留在磁盘上无副作用。
       - "--mmproj"
       - "/models/${MMPROJ_FILE:-Qwen3.5-9B/mmproj-Qwen_Qwen3.5-9B-f16.gguf}"
+      # 每图视觉 token 下限。llama.cpp 加载 Qwen-VL 时会明确警告：低于 1024 会影响
+      # 定位类任务的准确率，建议显式设为 1024（模型自带的默认值低于这个数）。
+      # 整页扫描件会被放大到接近上限、用不到下限；下限保的是印章/签字/表格截图这类小图。
+      - "--image-min-tokens"
+      - "${IMAGE_MIN_TOKENS:-1024}"
       # 每图视觉 token 上限。Qwen-VL 动态分辨率约 784px≈1token，A4 扫描件整页约
       # 1800-2600 token。3072 给整页留足余量，且与每槽 8192 里的正文+输出预算不冲突。
       - "--image-max-tokens"

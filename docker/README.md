@@ -64,9 +64,10 @@ mkdir -p ~/app/LLM/models/Qwen3.5-9B
 
 # 视觉投影器（876 MiB，与主权重同仓库）。
 # 注意：compose 默认无条件传 --mmproj，不下载这个文件的话必须同时注释掉
-# docker-compose.yml 里 --mmproj / 路径 / --image-max-tokens / 值 那 4 行（见下方
+# docker-compose.yml 里视觉相关的那 6 行（--mmproj / --image-min-tokens / --image-max-tokens
+# 及各自的值，见下方
 # 「关掉视觉」），否则 llama-server 加载阶段就会因为文件缺失而报错、容器起不来——
-# 连纯文本也用不了。只有「不下载 mmproj」+「注释掉 4 行」两件事一起做，纯文本才不受影响。
+# 连纯文本也用不了。只有「不下载 mmproj」+「注释掉那 6 行」两件事一起做，纯文本才不受影响。
 # 有网：hf download bartowski/Qwen_Qwen3.5-9B-GGUF mmproj-Qwen_Qwen3.5-9B-f16.gguf \
 #         --local-dir ~/app/LLM/models/Qwen3.5-9B
 ls -lh ~/app/LLM/models/Qwen3.5-9B/
@@ -176,8 +177,15 @@ bash test_api.sh             # 全量（含视觉）
 
 ### 关掉视觉
 
-注释掉 `docker-compose.yml` 里 `--mmproj` / `--image-max-tokens` 那 4 行，
-`docker compose up -d`。服务退回纯文本，显存少占约 0.86 GiB，mmproj 文件留在磁盘上无副作用。
+注释掉 `docker-compose.yml` 里视觉相关的 6 行后 `docker compose up -d`：
+
+```bash
+sed -i.bak '/^      - "--mmproj"/,/IMAGE_MAX_TOKENS/ s|^      - |#      - |' docker-compose.yml
+docker compose config | grep -c 'mmproj\|image-min\|image-max'   # 预期 0
+docker compose up -d
+```
+
+恢复：`mv docker-compose.yml.bak docker-compose.yml && docker compose up -d`。服务退回纯文本，显存少占约 0.86 GiB，mmproj 文件留在磁盘上无副作用。
 
 回滚后再跑 `bash test_api.sh`，末尾的视觉冒烟测试**会失败**——这是预期行为（mmproj 已经
 关掉了），只要前面的 `/v1/models`、纯文本回答、显存占用检查都通过即可，不用管视觉那步的失败。
@@ -191,8 +199,9 @@ bash test_api.sh             # 全量（含视觉）
 | 显存吃紧 | 每槽 = `CONTEXT_SIZE / LLAMA_PARALLEL`，别低于 8192：`.env` 里把 `CONTEXT_SIZE` 和 `LLAMA_PARALLEL` 一起降，如 `CONTEXT_SIZE=8192` + `LLAMA_PARALLEL=1`（每槽仍是 8192），不要只降 `CONTEXT_SIZE`；还不够就降 `IMAGE_MAX_TOKENS` 或参考下方「关掉视觉」 |
 | 用第二张卡 | `.env` 里改 `GPU_DEVICE_ID=1` |
 | 部分 offload | `.env` 里改 `N_GPU_LAYERS=20`（一般无需，9B 可全量） |
-| 视觉精度不够 | `.env` 里 `LLAMA_PARALLEL=1` + `IMAGE_MAX_TOKENS=6144`（并发降为 1） |
-| 关掉视觉 | 注释掉 compose 里 `--mmproj` / `--image-max-tokens` 4 行 |
+| 视觉精度不够（整页扫描件） | `.env` 里 `LLAMA_PARALLEL=1` + `IMAGE_MAX_TOKENS=6144`（并发降为 1） |
+| 视觉精度不够（印章/签字/局部小图） | `.env` 里调高 `IMAGE_MIN_TOKENS`（默认 1024，这是 llama.cpp 对 Qwen-VL 的建议下限） |
+| 关掉视觉 | 注释掉 compose 里视觉相关的 6 行（`--mmproj` / `--image-min-tokens` / `--image-max-tokens` 及各自的值） |
 | 升级 llama.cpp | `.env` 里改 `LLAMA_IMAGE=...:server-cuda-bNNNNN`（离线需先 save/load 新镜像） |
 
 ## 排错
