@@ -225,7 +225,7 @@ docker compose up -d
 | 项 | 实测值 |
 |---|---|
 | llama-server build | **b9765** (`73618f27a`) ≥ b9222 ✓ |
-| 镜像 tag | 本地原为浮动 `server-cuda`，无 `b10156`。用 `docker tag` 打别名为 **`server-cuda-b9765`**（真实 build 号），`.env` 的 `LLAMA_IMAGE` 相应指向它。**未重新打包镜像。** |
+| 镜像 tag | 本地镜像缓存里原只有浮动 `server-cuda`（无 `b10156` 那份）。用 `docker tag` 打别名为 **`server-cuda-b9765`**（该镜像的真实 build 号），`.env` 的 `LLAMA_IMAGE` 指向它。**未重新打包镜像。** 注：`b9765` 与 `b10156` 在 ghcr 上**都真实存在**，当时缺的是本地缓存而非上游发布——联网时两者都可 `docker pull`。仓库默认已改为 **`b9765`**（本机验证过的那个 build）。|
 | 采用档位 | 默认档：`CONTEXT_SIZE=16384` / `LLAMA_PARALLEL=2`（每槽 8192）/ `IMAGE_MIN_TOKENS=1024` / `IMAGE_MAX_TOKENS=3072` |
 | 加载后基线显存 | 8790 MiB（prompt cache 预热后升至 9014，有上限、不会无限涨） |
 | 单路满载峰值 | **8974 / 16376 MiB**，增量 184 MiB |
